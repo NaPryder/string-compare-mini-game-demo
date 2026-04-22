@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>String Compare Challenge</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="index.css">
+    <!-- <style>
+       
+    </style> -->
+</head>
+<body>
+    <div class="bg-blob bg-blob-1"></div>
+    <div class="bg-blob bg-blob-2"></div>
+    <div class="bg-blob bg-blob-3"></div>
+
+    <!-- ===== START SCREEN ===== -->
+    <div id="start-screen" class="screen active">
+        <div class="container">
+            <div class="start-card">
+                <div class="start-icon"><i class="fas fa-code-compare"></i></div>
+                <h1 class="start-title">String Compare Challenge</h1>
+                <p class="start-desc">
+                    Two random strings will appear side by side. Compare them character by character and identify exactly how many positions differ. Speed and accuracy both count.
+                </p>
+                <div class="slider-group">
+                    <div class="slider-label">Number of Questions</div>
+                    <div class="slider-value" id="qcount-display">20<span>questions</span></div>
+                    <input type="range" id="qcount-slider" min="10" max="50" value="20" step="1" aria-label="Number of questions">
+                    <div class="slider-bounds"><span>10</span><span>50</span></div>
+                </div>
+                <button class="btn-primary" id="start-btn">Start Challenge</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== QUIZ SCREEN ===== -->
+    <div id="quiz-screen" class="screen">
+        <div class="quiz-header">
+            <div class="quiz-top-bar">
+                <div class="quiz-progress-text" id="prog-text">Question 1 of 20</div>
+                <div class="quiz-stats">
+                    <div class="stat-badge score-badge"><i class="fas fa-star"></i><span class="stat-value" id="score-val">0</span></div>
+                    <div class="stat-badge timer-badge" id="timer-badge"><i class="fas fa-stopwatch"></i><span class="stat-value" id="timer-val">0.0s</span></div>
+                </div>
+            </div>
+            <div class="progress-track"><div class="progress-fill" id="prog-fill"></div></div>
+        </div>
+        <div class="question-area">
+            <p class="question-prompt">How many characters deviate between these two strings?</p>
+            <div class="strings-wrapper">
+                <div class="string-side left-side">
+                    <div class="string-label-side">String 1</div>
+                    <div class="string-value-side" id="str1-el"></div>
+                </div>
+                <div class="string-divider">
+                    <div class="vs-line"></div>
+                    <div class="vs-text">vs</div>
+                    <div class="vs-line"></div>
+                </div>
+                <div class="string-side right-side">
+                    <div class="string-label-side">String 2</div>
+                    <div class="string-value-side" id="str2-el"></div>
+                </div>
+            </div>
+            <div class="options-grid" id="opts-grid" role="group" aria-label="Answer options"></div>
+            <div class="keyboard-hint" id="kb-hint"><i class="fas fa-keyboard"></i> Press A, B, C, D, or E to answer</div>
+            <div class="solution-panel" id="sol-panel">
+                <div class="solution-title">Step-by-step Solution</div>
+                <div class="char-grid" id="char-grid"></div>
+                <div class="deviation-list" id="dev-list"></div>
+                <div class="solution-footer"><button class="btn-next" id="next-btn">Next Question</button></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== RESULT SCREEN ===== -->
+    <div id="result-screen" class="screen">
+        <div class="result-card">
+            <div class="grade-letter" id="grade-el">A</div>
+            <div class="grade-subtitle" id="grade-sub">Outstanding performance</div>
+            <div class="result-stats" id="res-stats"></div>
+            <div class="breakdown" id="breakdown-section"></div>
+            <div class="result-actions">
+                <button class="btn-primary" id="replay-btn">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+        const LABELS = ['A','B','C','D','E'];
+        const DEV_TEXT = ['No deviates','1 deviate','2 deviates','3 deviates','4 deviates'];
+
+        let S = {
+            total: 20, current: 0, score: 0,
+            questions: [], answers: [],
+            tStart: 0, tInterval: null, answered: false
+        };
+
+        const $ = id => document.getElementById(id);
+        const startScreen = $('start-screen');
+        const quizScreen = $('quiz-screen');
+        const resultScreen = $('result-screen');
+        const qcountSlider = $('qcount-slider');
+        const qcountDisplay = $('qcount-display');
+        const startBtn = $('start-btn');
+        const progText = $('prog-text');
+        const progFill = $('prog-fill');
+        const scoreVal = $('score-val');
+        const timerVal = $('timer-val');
+        const timerBadge = $('timer-badge');
+        const str1El = $('str1-el');
+        const str2El = $('str2-el');
+        const optsGrid = $('opts-grid');
+        const kbHint = $('kb-hint');
+        const solPanel = $('sol-panel');
+        const charGrid = $('char-grid');
+        const devList = $('dev-list');
+        const nextBtn = $('next-btn');
+        const gradeEl = $('grade-el');
+        const gradeSub = $('grade-sub');
+        const resStats = $('res-stats');
+        const breakdownSection = $('breakdown-section');
+        const replayBtn = $('replay-btn');
+
+        function shuffle(arr) {
+            const a = [...arr];
+            for (let i = a.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [a[i], a[j]] = [a[j], a[i]];
+            }
+            return a;
+        }
+
+        function showScreen(screen) {
+            [startScreen, quizScreen, resultScreen].forEach(s => s.classList.remove('active'));
+            void screen.offsetWidth;
+            screen.classList.add('active');
+        }
+
+        function fmtTime(sec) {
+            if (sec < 60) return sec.toFixed(1) + 's';
+            return Math.floor(sec / 60) + 'm ' + Math.floor(sec % 60) + 's';
+        }
+
+        function escHtml(ch) {
+            const map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+            return map[ch] || ch;
+        }
+
+        function genQuestion() {
+            const len = 12 + Math.floor(Math.random() * 13);
+            const numDev = Math.floor(Math.random() * 5);
+            let str1 = '';
+            for (let i = 0; i < len; i++) str1 += CHARS[Math.floor(Math.random() * CHARS.length)];
+            let s2 = str1.split('');
+            const positions = shuffle(Array.from({length: len}, (_, i) => i));
+            const devPos = [];
+            for (let i = 0; i < numDev; i++) {
+                const pos = positions[i];
+                let nc;
+                do { nc = CHARS[Math.floor(Math.random() * CHARS.length)]; } while (nc === s2[pos]);
+                s2[pos] = nc;
+                devPos.push(pos);
+            }
+            devPos.sort((a, b) => a - b);
+            return { str1, str2: s2.join(''), numDev, devPos };
+        }
+
+        qcountSlider.addEventListener('input', () => {
+            qcountDisplay.innerHTML = qcountSlider.value + '<span>questions</span>';
+        });
+
+        startBtn.addEventListener('click', startGame);
+        replayBtn.addEventListener('click', () => showScreen(startScreen));
+        nextBtn.addEventListener('click', nextQuestion);
+
+        function startGame() {
+            S.total = parseInt(qcountSlider.value);
+            S.current = 0; S.score = 0;
+            S.questions = []; S.answers = []; S.answered = false;
+            for (let i = 0; i < S.total; i++) S.questions.push(genQuestion());
+            showScreen(quizScreen);
+            loadQuestion();
+        }
+
+        function loadQuestion() {
+            S.answered = false;
+            const q = S.questions[S.current];
+            progText.textContent = 'Question ' + (S.current + 1) + ' of ' + S.total;
+            progFill.style.width = ((S.current / S.total) * 100) + '%';
+            scoreVal.textContent = S.score;
+            str1El.textContent = q.str1;
+            str2El.textContent = q.str2;
+
+            const opts = [0, 1, 2, 3, 4];
+            // const opts = shuffle([0, 1, 2, 3, 4]);
+            const correctIdx = opts.indexOf(q.numDev);
+            optsGrid.innerHTML = '';
+            opts.forEach((devCount, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.setAttribute('role', 'radio');
+                btn.setAttribute('aria-label', LABELS[idx] + ': ' + DEV_TEXT[devCount]);
+                btn.innerHTML = '<span class="opt-label">' + LABELS[idx] + '</span><span>' + DEV_TEXT[devCount] + '</span>';
+                btn.addEventListener('click', () => handleAnswer(idx, correctIdx, devCount, q));
+                optsGrid.appendChild(btn);
+            });
+
+            solPanel.classList.remove('visible');
+            kbHint.style.display = '';
+            nextBtn.textContent = (S.current === S.total - 1) ? 'See Results' : 'Next Question';
+
+            S.tStart = Date.now();
+            timerVal.textContent = '0.0s';
+            timerBadge.classList.add('active');
+            clearInterval(S.tInterval);
+            S.tInterval = setInterval(() => {
+                timerVal.textContent = ((Date.now() - S.tStart) / 1000).toFixed(1) + 's';
+            }, 100);
+        }
+
+        function handleAnswer(selIdx, correctIdx, selDev, question) {
+            if (S.answered) return;
+            S.answered = true;
+            clearInterval(S.tInterval);
+            timerBadge.classList.remove('active');
+            const elapsed = (Date.now() - S.tStart) / 1000;
+            const isCorrect = selIdx === correctIdx;
+            if (isCorrect) S.score++;
+            S.answers.push({ qi: S.current, correct: isCorrect, picked: selDev, actual: question.numDev, time: elapsed });
+
+            const btns = optsGrid.querySelectorAll('.option-btn');
+            btns.forEach((b, i) => {
+                b.classList.add('locked');
+                if (i === correctIdx) b.classList.add('correct');
+                if (i === selIdx && !isCorrect) b.classList.add('wrong');
+            });
+            kbHint.style.display = 'none';
+            scoreVal.textContent = S.score;
+            buildSolution(question);
+        }
+
+        function buildSolution(q) {
+            charGrid.innerHTML = '';
+            for (let i = 0; i < q.str1.length; i++) {
+                const col = document.createElement('div');
+                col.className = 'char-col';
+                col.style.animationDelay = (i * 28) + 'ms';
+                const match = q.str1[i] === q.str2[i];
+                const cls = match ? 'match' : 'mismatch';
+                const sepCls = match ? '' : ' mismatch';
+                const sep = match ? '\u2502' : '\u2195';
+                col.innerHTML =
+                    '<span class="char-pos">' + (i + 1) + '</span>' +
+                    '<span class="char-box ' + cls + '">' + escHtml(q.str1[i]) + '</span>' +
+                    '<span class="char-sep' + sepCls + '">' + sep + '</span>' +
+                    '<span class="char-box ' + cls + '">' + escHtml(q.str2[i]) + '</span>';
+                charGrid.appendChild(col);
+            }
+            if (q.devPos.length === 0) {
+                devList.innerHTML = '<div class="no-dev-msg">Both strings are identical \u2014 no deviations found.</div>';
+            } else {
+                let html = '<div class="deviation-list-title">Deviations found: ' + q.devPos.length + '</div>';
+                q.devPos.forEach(pos => {
+                    html +=
+                        '<div class="deviation-item">' +
+                            '<span class="pos-badge">Pos ' + (pos + 1) + '</span>' +
+                            '<span class="change-text">' +
+                                '<span class="from-char">' + escHtml(q.str1[pos]) + '</span>' +
+                                '<span class="arrow-ic"><i class="fas fa-arrow-right"></i></span>' +
+                                '<span class="to-char">' + escHtml(q.str2[pos]) + '</span>' +
+                            '</span>' +
+                        '</div>';
+                });
+                devList.innerHTML = html;
+            }
+            solPanel.classList.add('visible');
+        }
+
+        function nextQuestion() {
+            S.current++;
+            if (S.current >= S.total) { showResults(); return; }
+            const area = document.querySelector('.question-area');
+            area.style.opacity = '0';
+            area.style.transform = 'translateY(8px)';
+            setTimeout(() => {
+                loadQuestion();
+                area.style.transition = 'opacity .3s ease, transform .3s ease';
+                area.style.opacity = '1';
+                area.style.transform = 'translateY(0)';
+                setTimeout(() => { area.style.transition = ''; }, 350);
+            }, 150);
+        }
+
+        function showResults() {
+            clearInterval(S.tInterval);
+            const pct = (S.score / S.total) * 100;
+            let grade, gClass, subtitle;
+            if (pct >= 90)      { grade='A'; gClass='grade-A'; subtitle='Outstanding performance'; }
+            else if (pct >= 80) { grade='B'; gClass='grade-B'; subtitle='Great attention to detail'; }
+            else if (pct >= 70) { grade='C'; gClass='grade-C'; subtitle='Solid work, room to improve'; }
+            else if (pct >= 60) { grade='D'; gClass='grade-D'; subtitle='Needs more practice'; }
+            else                { grade='F'; gClass='grade-F'; subtitle='Keep practicing, you will improve'; }
+
+            const times = S.answers.map(a => a.time);
+            const totalTime = times.reduce((s, t) => s + t, 0);
+            const avgTime = totalTime / S.total;
+
+            gradeEl.textContent = grade;
+            gradeEl.className = 'grade-letter ' + gClass;
+            gradeSub.textContent = subtitle;
+            resStats.innerHTML =
+                statBlock(S.score + '/' + S.total, 'Score') +
+                statBlock(pct.toFixed(0) + '%', 'Accuracy') +
+                statBlock(avgTime.toFixed(1) + 's', 'Avg Time') +
+                statBlock(fmtTime(totalTime), 'Total Time');
+
+            let bd = '<div class="breakdown-title">Question Breakdown</div><div class="breakdown-list">';
+            S.answers.forEach((a, i) => {
+                const ic = a.correct ? 'ic' : 'iw';
+                const icon = a.correct ? 'fa-check' : 'fa-xmark';
+                const cls = a.correct ? 'bi-correct' : 'bi-wrong';
+                const txt = a.correct
+                    ? DEV_TEXT[a.actual]
+                    : 'Picked ' + DEV_TEXT[a.picked] + ' \u2014 answer: ' + DEV_TEXT[a.actual];
+                bd +=
+                    '<div class="breakdown-item ' + cls + '">' +
+                        '<span class="bi-num">#' + (i + 1) + '</span>' +
+                        '<span class="bi-icon ' + ic + '"><i class="fas ' + icon + '"></i></span>' +
+                        '<span class="bi-text">' + txt + '</span>' +
+                        '<span class="bi-time">' + a.time.toFixed(1) + 's</span>' +
+                    '</div>';
+            });
+            bd += '</div>';
+            breakdownSection.innerHTML = bd;
+            showScreen(resultScreen);
+        }
+
+        function statBlock(value, label) {
+            return '<div class="result-stat"><div class="result-stat-value">' + value + '</div><div class="result-stat-label">' + label + '</div></div>';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (!quizScreen.classList.contains('active')) {
+                if (startScreen.classList.contains('active') && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault(); startBtn.click();
+                }
+                return;
+            }
+            if (!S.answered) {
+                const map = {a:0, b:1, c:2, d:3, e:4};
+                const idx = map[e.key.toLowerCase()];
+                if (idx !== undefined) {
+                    const btns = optsGrid.querySelectorAll('.option-btn');
+                    if (btns[idx]) btns[idx].click();
+                }
+            }
+            if (S.answered && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault(); nextBtn.click();
+            }
+        });
+    </script>
+</body>
+</html>
